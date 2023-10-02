@@ -23,8 +23,10 @@ install.packages("dplyr")
 install.packages('ROCR')
 install.packages("corrplot")
 install.packages("ggrepel")
+install.packages("fmsb")
 
 library(ROCR)
+library(fmsb)
 library(tidyr)
 library(ggcorrplot)
 library(ggrepel)
@@ -73,8 +75,104 @@ outliers(InputData)
 
 #-------------------------DESCRIPTIVE STATISTICS----------------------
 
-#--------------------------FORWARDS-----------------------------------
+#-----------------------Haaland vs Harry Kane--------------------------
+haaland_data <- InputData %>% filter(FullName == "Erling Haaland")
+kane_data <- InputData %>% filter(FullName == "Harry Kane")
 
+# Select only the specified columns for comparison
+selected_stats <- c('AerialDuelsWonPer90', 'xG', 'Goals', 'xA', 'Assists', 'DuelsWonPer90', 'KeyPassesPer90', 'DribblesSuccessfulPer90', 'ShotsPer90', 'PassesPer90')
+
+# Combine the two players' stats into one dataframe
+combined_data <- rbind(
+  data.frame(Player = "Erling Haaland", haaland_data[, selected_stats]),
+  data.frame(Player = "Harry Kane", kane_data[, selected_stats])
+)
+
+# Reshape data for visualization
+data_long <- gather(data = combined_data, key = "Stat", value = "Value", -Player)
+
+# Plot grouped bar chart with value annotations
+comparison_plot <- ggplot(data_long, aes(x = Stat, y = Value, fill = Player)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = round(Value, 2)), vjust = -0.3, position = position_dodge(width = 0.8)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Comparison of Stats: Erling Haaland vs Harry Kane", x = "Stats", y = "Value") +
+  scale_fill_manual(values = c("Erling Haaland" = "#1E88E5", "Harry Kane" = "#FFC107"))
+
+print(comparison_plot)
+#-------------------------Top 4 clubs- defensive midfielders stats overall--------------------
+# Filter data for the selected players
+selected_players <- c('Granit Xhaka', 'Ilkay Gundogan', 'Rodri', 'Thomas Partey', 'Bruno Guimaraes', 'Casemiro', 'Eriksen', 'Sean Longstaff', 'Joseph Willock')
+players_data <- InputData %>% filter(FullName %in% selected_players)
+
+# Select only the specified columns for comparison
+selected_stats <- c('FullName', 'KeyPasses', 'Passes', 'Tackles', 'DuelsWon')
+
+# Select and aggregate stats for selected players (assuming there may be multiple records per player)
+players_selected <- players_data %>% select(all_of(selected_stats)) %>% 
+  group_by(FullName) %>% 
+  summarise_all(sum, na.rm = TRUE) %>% 
+  ungroup()
+
+# Reshape data for visualization
+data_long <- gather(data = players_selected, key = "Stat", value = "Value", -FullName)
+
+# Plot stacked bar chart
+comparison_plot <- ggplot(data_long, aes(x = FullName, y = Value, fill = Stat, label = round(Value))) +
+  geom_bar(stat = "identity", position = "stack", width = 0.7) +
+  geom_text(position = position_stack(vjust = 0.5), color = "white") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Comparison of Player Stats", x = "Players", y = "Total Value") +
+  scale_fill_manual(values = c("KeyPasses" = "#E41A1C", "Passes" = "#377EB8", "Tackles" = "#4DAF4A", "DuelsWon" = "#FF7F00"))
+
+print(comparison_plot)
+#-------------------------------Bruno Fernandes vs Kevin De Bruyne------------------
+# Filter data for Bruno Fernandes and Kevin De Bruyne
+players_data <- InputData %>% filter(FullName %in% c("Bruno Fernandes", "Kevin De Bruyne"))
+
+# Select only the specified columns for comparison
+selected_stats <- c('KeyPasses', 'Shots', 'Crosses', 'DuelsWon', 'Tackles', 'xA')
+players_selected <- players_data %>% select(FullName, all_of(selected_stats))
+
+# Summarize data if there are multiple records per player (you may need to adjust this depending on your data structure)
+players_summary <- players_selected %>% group_by(FullName) %>% summarise_all(mean, na.rm = TRUE)
+
+# Convert summarized data to a data frame and set row names
+players_summary <- as.data.frame(players_summary)
+
+# Melt the data for ggplot2
+data_melted <- melt(players_summary, id.vars = 'FullName')
+
+# Plot polar chart
+p <- ggplot(data_melted, aes(x = variable, y = value, group = FullName, color = FullName)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  coord_polar() +
+  labs(title = "Polar Chart: Bruno Fernandes vs Kevin De Bruyne")
+
+print(p)
+#----------------------Compare whose shots per 90 are very effective-------------------
+# Filter players who played more than 500 minutes
+filtered_data <- InputData %>% filter(MinutesPlayed > 500)
+
+# Selecting the top 15 players based on ShotsPer90 and xPxGPer90
+top_players <- filtered_data %>% 
+  select(FullName, Club, ShotsPer90, xPxGPer90) %>% 
+  arrange(desc(ShotsPer90 + xPxGPer90)) %>% 
+  head(15)
+
+# Plotting the scatter plot
+comparison_plot <- ggplot(top_players, aes(x = ShotsPer90, y = xPxGPer90, color = Club)) +
+  geom_point(size = 3) +
+  geom_text(aes(label = FullName), vjust = -0.5) +
+  theme_minimal() +
+  labs(title = "Top 15 Players: ShotsPer90 vs xPxGPer90", x = "Shots Per 90 Minutes", y = "Expected Post-Shot xG Per 90 Minutes") +
+  theme(legend.position = "bottom", legend.title = element_blank())
+
+print(comparison_plot)
+#--------------------------FORWARDS-----------------------------------
 # Filter forwards who played more than 500 minutes and rank by criteria
 forwards_ranked <- InputData %>%
   filter(MinutesPlayed > 500 & Position == "Forward") %>%
